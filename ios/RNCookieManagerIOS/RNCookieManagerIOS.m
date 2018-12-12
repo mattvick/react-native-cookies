@@ -70,18 +70,22 @@ RCT_EXPORT_METHOD(
     }
 }
 
-RCT_EXPORT_METHOD(setFromResponse:(NSURL *)url
+RCT_EXPORT_METHOD(
+    setFromResponse:(NSURL *)url
     value:(NSString *)value
     resolver:(RCTPromiseResolveBlock)resolve
-    rejecter:(RCTPromiseRejectBlock)reject) {
+    rejecter:(RCTPromiseRejectBlock)reject)
+{
     NSArray *cookies = [NSHTTPCookie cookiesWithResponseHeaderFields:@{@"Set-Cookie": value} forURL:url];
     [[NSHTTPCookieStorage sharedHTTPCookieStorage] setCookies:cookies forURL:url mainDocumentURL:NULL];
     resolve(nil);
 }
 
-RCT_EXPORT_METHOD(getFromResponse:(NSURL *)url
+RCT_EXPORT_METHOD(
+    getFromResponse:(NSURL *)url
     resolver:(RCTPromiseResolveBlock)resolve
-    rejecter:(RCTPromiseRejectBlock)reject) {
+    rejecter:(RCTPromiseRejectBlock)reject)
+{
     NSURLRequest *request = [NSURLRequest requestWithURL:url];
     [NSURLConnection sendAsynchronousRequest:request  queue:[[NSOperationQueue alloc] init]
                            completionHandler:^(NSURLResponse *response, NSData *data, NSError *error) {
@@ -170,6 +174,8 @@ RCT_EXPORT_METHOD(
                 WKHTTPCookieStore *cookieStore = [[WKWebsiteDataStore defaultDataStore] httpCookieStore];
                 [cookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *allCookies) {
                     for(NSHTTPCookie *currentCookie in allCookies) {
+                        // Try:
+                        [cookieStore deleteCookie:currentCookie completionHandler:^{}];
                         // Uses the NSHTTPCookie directly has no effect, nor deleted the cookie nor thrown an error.
                         // Create a new cookie with the given values and delete this one do the work.
                         NSMutableDictionary<NSHTTPCookiePropertyKey, id> *cookieData =  [NSMutableDictionary dictionary];
@@ -180,6 +186,7 @@ RCT_EXPORT_METHOD(
 
                         NSHTTPCookie *newCookie = [NSHTTPCookie cookieWithProperties:cookieData];
                         [cookieStore deleteCookie:newCookie completionHandler:^{}];
+                        NSLog(@"clearAll() currentCookie.name: %@", currentCookie.name);
                     }
                     resolve(nil);
                 }];
@@ -196,16 +203,44 @@ RCT_EXPORT_METHOD(
     }
 }
 
-RCT_EXPORT_METHOD(clearByName:(NSString *) name
+RCT_EXPORT_METHOD(
+    clearByName:(NSString *) name
+    useWebKit:(BOOL)useWebKit
     resolver:(RCTPromiseResolveBlock)resolve
-    rejecter:(RCTPromiseRejectBlock)reject) {
-    NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
-    for (NSHTTPCookie *c in cookieStorage.cookies) {
-      if ([[c name] isEqualToString:name]) {
-        [cookieStorage deleteCookie:c];
-      }
+    rejecter:(RCTPromiseRejectBlock)reject)
+{
+    if (useWebKit) {
+        if (@available(iOS 11.0, *)) {
+            dispatch_async(dispatch_get_main_queue(), ^() {
+                // WKHTTPCookieStore *cookieStore = [[WKWebsiteDataStore defaultDataStore] httpCookieStore];
+                // [cookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *allCookies) {
+                //     for(NSHTTPCookie *cookie in allCookies) {
+                //         if([cookie.name isEqualToString:name]) {
+                //             // NSLog(@"cookie.name: %@", cookie.name);
+                //             NSLog(@"deleteCookie name: %@", name);
+                //             [cookieStore deleteCookie:cookie completionHandler:^() {
+                //                 resolve(nil);
+                //             }];
+                //         }
+                //     }
+                //     // should reject here with error "cookie with name XXX not found"??
+                //     resolve(nil);
+                // }];
+
+                resolve(nil);
+            });
+        } else {
+            reject(@"", NOT_AVAILABLE_ERROR_MESSAGE, nil);
+        }
+    } else {
+        NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+        for (NSHTTPCookie *c in cookieStorage.cookies) {
+            if ([[c name] isEqualToString:name]) {
+                [cookieStorage deleteCookie:c];
+            }
+        }
+        resolve(nil);
     }
-    resolve(nil);
 }
 
 RCT_EXPORT_METHOD(
@@ -215,7 +250,7 @@ RCT_EXPORT_METHOD(
 {
     if (useWebKit) {
         if (@available(iOS 11.0, *)) {
-            dispatch_async(dispatch_get_main_queue(), ^(){
+            dispatch_async(dispatch_get_main_queue(), ^() {
                 WKHTTPCookieStore *cookieStore = [[WKWebsiteDataStore defaultDataStore] httpCookieStore];
                 [cookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *allCookies) {
                     resolve([self createCookieList: allCookies]);
@@ -230,18 +265,43 @@ RCT_EXPORT_METHOD(
     }
 }
 
-RCT_EXPORT_METHOD(getAll:(RCTPromiseResolveBlock)resolve
-    rejecter:(RCTPromiseRejectBlock)reject) {
-    NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
-    NSMutableDictionary *cookies = [NSMutableDictionary dictionary];
-    for (NSHTTPCookie *c in cookieStorage.cookies) {
-        NSMutableDictionary *d = [NSMutableDictionary dictionary];
-        [d setObject:c.value forKey:@"value"];
-        [d setObject:c.name forKey:@"name"];
-        [d setObject:c.domain forKey:@"domain"];
-        [d setObject:c.path forKey:@"path"];
-        [d setObject:[self.formatter stringFromDate:c.expiresDate] forKey:@"expiresDate"];
-        [cookies setObject:d forKey:c.name];
+RCT_EXPORT_METHOD(
+    copyToWebKit:(NSString *) name
+    resolver:(RCTPromiseResolveBlock)resolve
+    rejecter:(RCTPromiseRejectBlock)reject)
+{
+    // NSLog(@"name: %@", name);
+    if (@available(iOS 11.0, *)) {
+        dispatch_async(dispatch_get_main_queue(), ^() {
+            WKHTTPCookieStore *cookieStore = [[WKWebsiteDataStore defaultDataStore] httpCookieStore];
+            NSArray *cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookies];
+            for (NSHTTPCookie *cookie in cookies) {
+                NSLog(@"cookie.name: %@", cookie.name);
+                // if([cookie.name isEqualToString:@"sessionid"]) {
+                //     NSLog(@"sessionid: %@", cookie);
+                // }
+                if([cookie.name isEqualToString:name]) {
+                    // NSLog(@"cookie.name: %@", cookie.name);
+                    NSLog(@"copyToWebKit name: %@", name);
+                    // [cookieStore setCookie:cookie completionHandler:{
+                    //     // NSMutableDictionary *cookies = [NSMutableDictionary dictionary];
+                    //     // for(NSHTTPCookie *currentCookie in allCookies) {
+                    //     //     if([currentCookie.domain containsString:topLevelDomain]) {
+                    //     //         [cookies setObject:currentCookie.value forKey:currentCookie.name];
+                    //     //     }
+                    //     // }
+                    //     resolve(nil);
+                    // }];
+                    [cookieStore setCookie:cookie completionHandler:^() {
+                        resolve(nil);
+                    }];
+                }
+            }
+            // should reject here with error "cookie with name XXX not found"??
+            resolve(nil);
+        });
+    } else {
+        reject(@"", NOT_AVAILABLE_ERROR_MESSAGE, nil);
     }
 }
 
