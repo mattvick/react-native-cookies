@@ -171,9 +171,10 @@ RCT_EXPORT_METHOD(
                 NSSet *websiteDataTypes = [NSSet setWithArray:@[WKWebsiteDataTypeCookies]];
                 NSDate *dateFrom = [NSDate dateWithTimeIntervalSince1970:0];
                 [[WKWebsiteDataStore defaultDataStore] removeDataOfTypes:websiteDataTypes
-                                                           modifiedSince:dateFrom
-                                                       completionHandler:^{}];
-                resolve(nil);
+                                                        modifiedSince:dateFrom
+                                                        completionHandler:^() {
+                                                            resolve(nil);
+                                                        }];
             });
         } else {
             reject(@"", NOT_AVAILABLE_ERROR_MESSAGE, nil);
