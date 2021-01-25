@@ -12,6 +12,13 @@
     ],
     "main": "index.js",
     "author": "@joeferraro",
+    "contributors": [
+        {
+            "name": "Matthew Vickery",
+            "email": "vickery.matthew@gmail.com",
+            "url": "https://matthewvickery.org/"
+        }
+    ],
     "license": "MIT",
     "dependencies": {
         "invariant": "^2.1.0"
